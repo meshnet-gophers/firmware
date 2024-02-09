@@ -1,0 +1,21 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="flash and monitor" type="tinyGoConfigurationId" factoryName="tinyGoFactoryIdflash">
+    <module name="firmware" />
+    <working_directory value="$PROJECT_DIR$" />
+    <EXTENSION ID="net.ashald.envfile">
+      <option name="IS_ENABLED" value="false" />
+      <option name="IS_SUBST" value="false" />
+      <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+      <option name="IS_IGNORE_MISSING_FILES" value="false" />
+      <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+      <ENTRIES>
+        <ENTRY IS_ENABLED="true" PARSER="runconfig" />
+      </ENTRIES>
+    </EXTENSION>
+    <tinygo_main_file value="$PROJECT_DIR$" />
+    <tinygo_cmd_options value="--monitor" />
+    <tinygo_main_file value="$PROJECT_DIR$" />
+    <tinygo_output_path value="" />
+    <method v="2" />
+  </configuration>
+</component>
