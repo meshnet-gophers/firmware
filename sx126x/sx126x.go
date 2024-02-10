@@ -607,7 +607,7 @@ func (d *Device) SetHeaderType(headerType uint8) {
 func (d *Device) LoraConfig(cnf lora.Config) {
 	// Save given configuration
 	d.loraConf = cnf
-	d.loraConf.SyncWord = syncword(int(cnf.SyncWord))
+	//d.loraConf.SyncWord = syncword(int(cnf.SyncWord))
 	// Switch to standby prior to configuration changes
 	d.SetStandby()
 	// Clear errors, disable radio interrupts for the moment
