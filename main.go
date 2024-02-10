@@ -1,11 +1,11 @@
 package main
 
 import (
+	"github.com/meshnet-gophers/firmware/sx126x"
 	"log"
 	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
-	"tinygo.org/x/drivers/sx126x"
 )
 
 const (

@@ -5,8 +5,9 @@ package sx126x
 
 import (
 	"errors"
-	"machine"
 	"time"
+
+	"machine"
 
 	"tinygo.org/x/drivers"
 	"tinygo.org/x/drivers/lora"
@@ -616,11 +617,10 @@ func (d *Device) LoraConfig(cnf lora.Config) {
 	// Define radio operation mode
 	d.SetPacketType(SX126X_PACKET_TYPE_LORA)
 	d.SetRfFrequency(d.loraConf.Freq)
-	d.SetBufferBaseAddress(0, 0)
 	d.SetModulationParams(d.loraConf.Sf, bandwidth(d.loraConf.Bw), d.loraConf.Cr, d.loraConf.Ldr)
 	d.SetTxParams(d.loraConf.LoraTxPowerDBm, SX126X_PA_RAMP_200U)
 	d.SetSyncWord(d.loraConf.SyncWord)
-
+	d.SetBufferBaseAddress(0, 0)
 }
 
 // Tx sends a lora packet, (with timeout)
@@ -656,62 +656,6 @@ func (d *Device) Tx(pkt []uint8, timeoutMs uint32) error {
 	}
 	return nil
 }
-func (d *Device) Rx2() ([]uint8, error) {
-	if d.loraConf.Freq == 0 {
-		return nil, lora.ErrUndefinedLoraConf
-	}
-
-	if d.controller != nil {
-		err := d.controller.SetRfSwitchMode(RFSWITCH_RX)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	d.ClearIrqStatus(SX126X_IRQ_ALL)
-	irqVal := uint16(SX126X_IRQ_RX_DONE | SX126X_IRQ_TIMEOUT | SX126X_IRQ_CRC_ERR | SX126X_IRQ_HEADER_ERR | SX126X_IRQ_HEADER_VALID)
-	irqVal = SX126X_IRQ_ALL
-	d.SetStandby()
-	d.SetBufferBaseAddress(0, 0)
-	d.SetRfFrequency(d.loraConf.Freq)
-	d.SetModulationParams(d.loraConf.Sf, bandwidth(d.loraConf.Bw), d.loraConf.Cr, d.loraConf.Ldr)
-	d.SetPacketParam(d.loraConf.Preamble, d.loraConf.HeaderType, d.loraConf.Crc, 0xFF, d.loraConf.Iq)
-	d.SetDioIrqParams(irqVal, irqVal, SX126X_IRQ_NONE, SX126X_IRQ_NONE)
-	d.SetRx(0xffffff)
-	println("awaiting msg")
-
-	for {
-		var done bool
-		msg := <-d.GetRadioEventChan()
-		println("event recvd:", msg.EventType)
-		switch msg.EventType {
-		case lora.RadioEventRxDone:
-			done = true
-			break
-		case lora.RadioEventTimeout:
-			continue
-		case lora.RadioEventUnhandled:
-			println("unhandled event")
-		case lora.RadioEventCrcError:
-			println("crc error event")
-		default:
-			println("event", msg.EventType)
-			return nil, errUnexpectedRxRadioEvent
-		}
-		if done {
-			break
-		}
-	}
-	println("reading buffer")
-	pLen, pStart := d.GetRxBufferStatus()
-	println("plen, pstart:", pLen, pStart)
-	d.SetBufferBaseAddress(0, pStart+1)
-	pkt := d.ReadBuffer(pLen + 1)
-	println("pkt len", len(pkt))
-	pkt = pkt[1:]
-
-	return pkt, nil
-}
 
 // LoraRx tries to receive a Lora packet (with timeout in milliseconds)
 func (d *Device) Rx(timeoutMs uint32) ([]uint8, error) {
@@ -735,20 +679,18 @@ func (d *Device) Rx(timeoutMs uint32) ([]uint8, error) {
 	d.SetPacketParam(d.loraConf.Preamble, d.loraConf.HeaderType, d.loraConf.Crc, 0xFF, d.loraConf.Iq)
 	d.SetDioIrqParams(irqVal, irqVal, SX126X_IRQ_NONE, SX126X_IRQ_NONE)
 	d.SetRx(timeoutMsToRtcSteps(timeoutMs))
-	println("awaiting msg")
+
 	msg := <-d.GetRadioEventChan()
+
 	if msg.EventType == lora.RadioEventTimeout {
-		println("timeout")
 		return nil, nil
 	} else if msg.EventType != lora.RadioEventRxDone {
 		return nil, errUnexpectedRxRadioEvent
 	}
-	println("reading buffer")
+
 	pLen, pStart := d.GetRxBufferStatus()
-	println("plen, pstart:", pLen, pStart)
 	d.SetBufferBaseAddress(0, pStart+1)
 	pkt := d.ReadBuffer(pLen + 1)
-	println("pkt len", len(pkt))
 	pkt = pkt[1:]
 
 	return pkt, nil
@@ -756,89 +698,39 @@ func (d *Device) Rx(timeoutMs uint32) ([]uint8, error) {
 
 // HandleInterrupt must be called by main code on DIO state change.
 func (d *Device) HandleInterrupt() {
-	for {
-		st := d.GetIrqStatus()
-		if st == 0 {
-			return
-		}
+	st := d.GetIrqStatus()
+	d.ClearIrqStatus(SX126X_IRQ_ALL)
 
-		println("irq handler triggered: ", st)
-
-		if (st & SX126X_IRQ_HEADER_VALID) > 0 {
-			println("irq: header valid")
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventUnhandled, uint16(st), nil}:
-			default:
-			}
+	if (st & SX126X_IRQ_RX_DONE) > 0 {
+		select {
+		case d.radioEventChan <- lora.RadioEvent{lora.RadioEventRxDone, uint16(st), nil}:
+		default:
 		}
-		if (st & SX126X_IRQ_HEADER_ERR) > 0 {
-			println("irq: header err")
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventUnhandled, uint16(st), nil}:
-			default:
-			}
-		}
-		if (st & SX126X_IRQ_CAD_DONE) > 0 {
-			println("irq: cad done")
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventUnhandled, uint16(st), nil}:
-			default:
-			}
-		}
-		if (st & SX126X_IRQ_CAD_DETECTED) > 0 {
-			println("irq: cad detected")
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventUnhandled, uint16(st), nil}:
-			default:
-			}
-		}
-		if (st & SX126X_IRQ_RX_DONE) > 0 {
-			println("irq: rx done")
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventRxDone, uint16(st), nil}:
-				println("rx done sent")
-			default:
-				println("rx done NOT sent")
-			}
-		}
-
-		if (st & SX126X_IRQ_TX_DONE) > 0 {
-			println("irq: tx done")
-
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventTxDone, uint16(st), nil}:
-			default:
-			}
-		}
-
-		if (st & SX126X_IRQ_TIMEOUT) > 0 {
-			println("irq: timeout")
-
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventTimeout, uint16(st), nil}:
-			default:
-			}
-
-		}
-
-		if (st & SX126X_IRQ_CRC_ERR) > 0 {
-			println("irq: crc error")
-
-			select {
-			case d.radioEventChan <- lora.RadioEvent{lora.RadioEventCrcError, uint16(st), nil}:
-
-			default:
-			}
-		}
-		if (st & SX126X_IRQ_PREAMBLE_DETECTED) > 0 {
-			//println("irq: preamble")
-			select {
-			//	case d.radioEventChan <- lora.RadioEvent{lora.RadioEventUnhandled, uint16(st), nil}:
-			default:
-			}
-		}
-		d.ClearIrqStatus(st)
 	}
+
+	if (st & SX126X_IRQ_TX_DONE) > 0 {
+		select {
+		case d.radioEventChan <- lora.RadioEvent{lora.RadioEventTxDone, uint16(st), nil}:
+		default:
+		}
+	}
+
+	if (st & SX126X_IRQ_TIMEOUT) > 0 {
+		select {
+		case d.radioEventChan <- lora.RadioEvent{lora.RadioEventTimeout, uint16(st), nil}:
+		default:
+		}
+
+	}
+
+	if (st & SX126X_IRQ_CRC_ERR) > 0 {
+		select {
+		case d.radioEventChan <- lora.RadioEvent{lora.RadioEventCrcError, uint16(st), nil}:
+
+		default:
+		}
+	}
+
 }
 
 func bandwidth(bw uint8) uint8 {
