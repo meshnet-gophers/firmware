@@ -14,7 +14,7 @@ const (
 )
 
 func main() {
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	println("\n# sx1262 test")
 	println("# ----------------------")
@@ -48,23 +48,18 @@ func main() {
 	}
 
 	loraRadio.LoraConfig(loraConf)
+	//loraRadio.SetDioIrqParams(sx126x.SX126X_IRQ_ALL, sx126x.SX126X_IRQ_ALL, 0x00, 0x00)
 
-	loraRadio.SetDioIrqParams(sx126x.SX126X_IRQ_ALL, sx126x.SX126X_IRQ_ALL, 0x00, 0x00)
-
-	go func() {
-		for {
-			in := <-loraRadio.GetRadioEventChan()
-			println("interrupt", in.EventType, in.EventData)
-		}
-	}()
+	//go func() {
+	//	for {
+	//		in := <-loraRadio.GetRadioEventChan()
+	//		println("interrupt", in.EventType, in.EventData)
+	//	}
+	//}()
 
 	println("main: Receiving Lora ")
-	machine.LORA_ANT_SW.High()
-	loraRadio.SetRx(0xffffff)
 	for {
-	}
-	for {
-		buf, err := loraRadio.Rx(0xffffff)
+		buf, err := loraRadio.Rx2() //0xffffff
 		if err != nil {
 			println("RX Error: ", err)
 		} else if buf != nil {
@@ -98,7 +93,7 @@ func configureLoRa() (*sx126x.Device, error) {
 	controller := sx126x.NewRadioControl(
 		machine.LORA_CS, machine.LORA_BUSY, machine.LORA_DIO1,
 		machine.LORA_ANT_SW, machine.NoPin, machine.NoPin)
-	controller.SetRfSwitchMode(sx126x.RFSWITCH_RX)
+	//controller.SetRfSwitchMode(sx126x.RFSWITCH_RX)
 	err = loraRadio.SetRadioController(controller)
 	if err != nil {
 		return nil, err
