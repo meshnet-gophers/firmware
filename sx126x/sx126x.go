@@ -685,11 +685,15 @@ func (d *Device) Rx2() ([]uint8, error) {
 		msg := <-d.GetRadioEventChan()
 		println("event recvd:", msg.EventType)
 		switch msg.EventType {
-		case lora.RadioEventTxDone:
+		case lora.RadioEventRxDone:
 			done = true
 			break
 		case lora.RadioEventTimeout:
 			continue
+		case lora.RadioEventUnhandled:
+			println("unhandled event")
+		case lora.RadioEventCrcError:
+			println("crc error event")
 		default:
 			println("event", msg.EventType)
 			return nil, errUnexpectedRxRadioEvent
