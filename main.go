@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/meshnet-gophers/firmware/sx126x"
 	"log"
 	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
+	"tinygo.org/x/drivers/sx126x"
 )
 
 const (
@@ -23,14 +23,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for i := 0; ; i++ {
-		detected := loraRadio.DetectDevice()
-		if detected {
-			println("DEVICE DETECTED")
-			break
-		}
-		println(i, ":", "sx126x not detected.")
-		time.Sleep(1 * time.Second)
+
+	detected := loraRadio.DetectDevice()
+	if !detected {
+		panic("sx1262 not detected")
 	}
 
 	loraConf := lora.Config{
@@ -48,18 +44,11 @@ func main() {
 	}
 
 	loraRadio.LoraConfig(loraConf)
-	//loraRadio.SetDioIrqParams(sx126x.SX126X_IRQ_ALL, sx126x.SX126X_IRQ_ALL, 0x00, 0x00)
-
-	//go func() {
-	//	for {
-	//		in := <-loraRadio.GetRadioEventChan()
-	//		println("interrupt", in.EventType, in.EventData)
-	//	}
-	//}()
 
 	println("main: Receiving Lora ")
 	for {
-		buf, err := loraRadio.Rx2() //0xffffff
+		buf, err := loraRadio.Rx(0xffffff)
+
 		if err != nil {
 			println("RX Error: ", err)
 		} else if buf != nil {
@@ -71,7 +60,7 @@ func main() {
 func configureLoRa() (*sx126x.Device, error) {
 	err := machine.SPI1.Configure(machine.SPIConfig{
 		//Mode:      0,
-		Frequency: 16 * 1e6,
+		Frequency: 8 * 1e6,
 		//SDO: machine.GPIO15,
 		//SDI: machine.GPIO24,
 		//SCK: machine.GPIO14,
