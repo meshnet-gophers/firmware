@@ -1,8 +1,11 @@
 package main
 
 import (
+	//pb "buf.build/gen/go/meshnet-gophers/protobufs/protocolbuffers/go/meshtastic"
+	"encoding/hex"
+	"github.com/crypto-smoke/meshtastic-go"
 	"github.com/meshnet-gophers/firmware/sx126x"
-	"log"
+	//"google.golang.org/protobuf/proto"
 	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
@@ -14,7 +17,11 @@ const (
 )
 
 func main() {
-	time.Sleep(1 * time.Second)
+	for i := 0; i < 1; i++ {
+		println(i)
+		time.Sleep(1 * time.Second)
+	}
+	time.Sleep(5 * time.Second)
 
 	println("\n# sx1262 test")
 	println("# ----------------------")
@@ -45,6 +52,7 @@ func main() {
 
 	loraRadio.LoraConfig(loraConf)
 
+	dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
 	println("main: Receiving Lora ")
 	for {
 		buf, err := loraRadio.Rx(0xffffff)
@@ -52,7 +60,29 @@ func main() {
 		if err != nil {
 			println("RX Error: ", err)
 		} else if buf != nil {
-			log.Println("Packet Received: len=", len(buf), string(buf))
+			//log.Println("Packet Received: len=", len(buf), string(buf))
+			packet, headerFlags, err := ParsePacket(buf)
+			if err != nil {
+				panic(err)
+			}
+			// ignore duplicates of the packet
+			if dedupe.Seen(packet.Sender, packet.PacketID) {
+				continue
+			}
+			println(packet.Sender, packet.Destination, packet.PacketID, headerFlags.HopLimit)
+			println(hex.EncodeToString(packet.Payload))
+
+			// hex bytes of text message packet with message of "test": d4b66213862739e3
+			/*
+				// MeshPacket is not a representation of the packet on the wire, I don't think.
+				var pkt pb.MeshPacket
+				err = proto.Unmarshal(packet.Payload, &pkt)
+				if err != nil {
+					panic(err)
+				}
+				println("unmarhalled packet payload to Meshpacket")
+			*/
+
 		}
 	}
 }
