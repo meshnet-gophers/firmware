@@ -1,11 +1,9 @@
 package main
 
 import (
-	//pb "buf.build/gen/go/meshnet-gophers/protobufs/protocolbuffers/go/meshtastic"
 	"encoding/hex"
 	"github.com/crypto-smoke/meshtastic-go"
 	"github.com/meshnet-gophers/firmware/sx126x"
-	//"google.golang.org/protobuf/proto"
 	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
@@ -17,11 +15,14 @@ const (
 )
 
 func main() {
-	for i := 0; i < 1; i++ {
-		println(i)
-		time.Sleep(1 * time.Second)
+	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	// 3 second loop to give serial monitor time to come up
+	for i := 0; i < 3; i++ {
+		machine.LED.Low()
+		time.Sleep(500 * time.Millisecond)
+		machine.LED.High()
+		time.Sleep(500 * time.Millisecond)
 	}
-	time.Sleep(5 * time.Second)
 
 	println("\n# sx1262 test")
 	println("# ----------------------")
@@ -36,6 +37,7 @@ func main() {
 		panic("sx1262 not detected")
 	}
 
+	// Meshtastic LongFast preset
 	loraConf := lora.Config{
 		Freq:           906875000,
 		Bw:             lora.Bandwidth_250_0,
@@ -46,17 +48,17 @@ func main() {
 		Ldr:            lora.LowDataRateOptimizeOff,
 		Iq:             lora.IQStandard,
 		Crc:            lora.CRCOn,
-		SyncWord:       0x24b4,
-		LoraTxPowerDBm: 1,
+		SyncWord:       0x24b4, // 0x2b sync word with some magic bit shifting to be compatible with older LoRa radios
+		LoraTxPowerDBm: 0,      // disable radio for now
 	}
 
 	loraRadio.LoraConfig(loraConf)
 
+	// Avoid duplicate packets
 	dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
 	println("main: Receiving Lora ")
 	for {
 		buf, err := loraRadio.Rx(0xffffff)
-
 		if err != nil {
 			println("RX Error: ", err)
 		} else if buf != nil {
@@ -65,13 +67,36 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
+			_ = headerFlags
 			// ignore duplicates of the packet
 			if dedupe.Seen(packet.Sender, packet.PacketID) {
 				continue
 			}
-			println(packet.Sender, packet.Destination, packet.PacketID, headerFlags.HopLimit)
-			println(hex.EncodeToString(packet.Payload))
 
+			println(packet.Sender, packet.Destination, "0x"+hex.EncodeToString(packet.Payload))
+			/*
+				var pkt pb.MeshPacket
+
+				pkt.PayloadVariant = &pb.MeshPacket_Decoded{Decoded: &pb.Data{
+					Portnum:      0,
+					Payload:      packet.Payload,
+					WantResponse: false,
+					Dest:         0,
+					Source:       0,
+					RequestId:    0,
+					ReplyId:      0,
+					Emoji:        0,
+				}}
+				println("packet constructed")
+				out, err := json.MarshalIndent(&pkt, "", "  ")
+				if err == nil {
+					panic(err)
+				}
+				println("json done")
+				println(string(out))
+				println("printing done")
+
+			*/
 			// hex bytes of text message packet with message of "test": d4b66213862739e3
 			/*
 				// MeshPacket is not a representation of the packet on the wire, I don't think.
@@ -103,8 +128,8 @@ func configureLoRa() (*sx126x.Device, error) {
 	machine.LORA_ANT_SW.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	// trigger a radio reset
-	//machine.LORA_RESET.Low()
-	//time.Sleep(100 * time.Nanosecond)
+	machine.LORA_RESET.Low()
+	time.Sleep(100 * time.Nanosecond)
 	machine.LORA_RESET.High()
 
 	loraRadio := sx126x.New(machine.SPI1)
