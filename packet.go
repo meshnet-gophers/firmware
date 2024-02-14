@@ -40,9 +40,9 @@ func ParsePacket(packet []byte) (Packet, PacketHeaderFlags, error) {
 	headerFlags := parseHeaderFlags(packet[FlagsOffset])
 
 	return Packet{
-		Destination: binary.BigEndian.Uint32(packet[DestinationOffset:]),
-		Sender:      binary.BigEndian.Uint32(packet[SenderOffset:]),
-		PacketID:    binary.BigEndian.Uint32(packet[PacketIDOffset:]),
+		Destination: binary.LittleEndian.Uint32(packet[DestinationOffset:]),
+		Sender:      binary.LittleEndian.Uint32(packet[SenderOffset:]),
+		PacketID:    binary.LittleEndian.Uint32(packet[PacketIDOffset:]),
 		Flags:       packet[FlagsOffset],
 		ChannelHash: packet[ChannelHashOffset],
 		Payload:     packet[DataOffset:],
