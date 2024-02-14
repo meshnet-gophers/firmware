@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	pb "github.com/meshnet-gophers/firmware/meshtastic"
+	pb "github.com/meshnet-gophers/protobufs/meshtastic"
 
 	"time"
 )
