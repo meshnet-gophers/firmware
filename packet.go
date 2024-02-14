@@ -19,7 +19,7 @@ type Packet struct {
 	Destination uint32
 	Sender      uint32
 	PacketID    uint32
-	Flags       byte
+	Flags       PacketHeaderFlags
 	ChannelHash byte
 	Payload     []byte
 }
@@ -32,21 +32,21 @@ type PacketHeaderFlags struct {
 }
 
 // ParsePacket takes a byte slice and parses the packet header and payload.
-func ParsePacket(packet []byte) (Packet, PacketHeaderFlags, error) {
+func ParsePacket(packet []byte) (*Packet, error) {
 	if len(packet) < DataOffset {
-		return Packet{}, PacketHeaderFlags{}, errors.New("packet is too short to contain a valid header")
+		return nil, errors.New("packet is too short to contain a valid header")
 	}
 
 	headerFlags := parseHeaderFlags(packet[FlagsOffset])
 
-	return Packet{
+	return &Packet{
 		Destination: binary.LittleEndian.Uint32(packet[DestinationOffset:]),
 		Sender:      binary.LittleEndian.Uint32(packet[SenderOffset:]),
 		PacketID:    binary.LittleEndian.Uint32(packet[PacketIDOffset:]),
-		Flags:       packet[FlagsOffset],
+		Flags:       headerFlags,
 		ChannelHash: packet[ChannelHashOffset],
 		Payload:     packet[DataOffset:],
-	}, headerFlags, nil
+	}, nil
 }
 
 // parseHeaderFlags parses the flags from the packet header.
