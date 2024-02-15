@@ -5,6 +5,7 @@ import (
 	"github.com/crypto-smoke/meshtastic-go"
 	"github.com/meshnet-gophers/firmware/hardware"
 	pb "github.com/meshnet-gophers/protobufs/meshtastic"
+	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
 )
@@ -15,19 +16,22 @@ const (
 )
 
 func main() {
-	/*
-		go func() {
-			machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
-			for {
-				machine.LED.High()
-				time.Sleep(1 * time.Second)
-				machine.LED.Low()
-				time.Sleep(1 * time.Second)
-			}
-		}()
+	//	machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	hardware.LED.High()
+	main2()
+}
+func main2() {
 
+	go func() {
+		hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+		for {
+			hardware.LED.High()
+			time.Sleep(1 * time.Second)
+			hardware.LED.Low()
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
-	*/
 	// sleep for 3 seconds to let serial monitor connect
 	for i := 0; i < 3; i++ {
 		println("sleep cycle", i)
@@ -39,18 +43,16 @@ func main() {
 
 	loraRadio, err := hardware.ConfigureLoRa()
 	if err != nil {
-		panic(err)
+		println(err)
+		return
 	}
 	_ = loraRadio
 
-	/*
-
-		detected := loraRadio.DetectDevice()
-		if !detected {
-			panic("sx1262 not detected")
-		}
-
-	*/
+	detected := loraRadio.DetectDevice()
+	if !detected {
+		println("sx1262 not detected")
+		return
+	}
 
 	loraConf := lora.Config{
 		Freq:           906875000,
@@ -67,7 +69,7 @@ func main() {
 	}
 
 	_ = loraConf
-	//loraRadio.LoraConfig(loraConf)
+	loraRadio.LoraConfig(loraConf)
 
 	dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
 	println("main: Receiving Lora ")
@@ -79,7 +81,7 @@ func main() {
 	// removing the three lines above (and the pb import) allows program to run
 
 	for {
-		//	buf, err := loraRadio.Rx(0xffffff)
+		//buf, err := loraRadio.Rx(0xffffff)
 		var buf []byte
 		var err error
 		if err != nil {
@@ -100,6 +102,7 @@ func main() {
 			println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
 			println("payload:", hex.EncodeToString(packet.Payload))
 			println()
+
 			continue /*
 				data, err := decrypt(packet)
 				if err != nil {

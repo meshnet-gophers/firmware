@@ -1,4 +1,4 @@
-//go:build !stm32wlx
+//go:build rp2040
 
 package sx126x
 
