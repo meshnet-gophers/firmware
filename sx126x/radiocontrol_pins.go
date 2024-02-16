@@ -1,4 +1,4 @@
-//go:build rp2040
+//go:build !stm32wl && !amd64
 
 package sx126x
 

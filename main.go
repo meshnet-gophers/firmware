@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/hex"
-	"github.com/crypto-smoke/meshtastic-go"
 	"github.com/meshnet-gophers/firmware/hardware"
 	pb "github.com/meshnet-gophers/protobufs/meshtastic"
+	"machine"
 	"time"
 	"tinygo.org/x/drivers/lora"
 )
@@ -15,19 +15,17 @@ const (
 )
 
 func main() {
-	/*
-		go func() {
-			machine.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
-			for {
-				machine.LED.High()
-				time.Sleep(1 * time.Second)
-				machine.LED.Low()
-				time.Sleep(1 * time.Second)
-			}
-		}()
 
+	go func() {
+		hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+		for {
+			hardware.LED.High()
+			time.Sleep(1 * time.Second)
+			hardware.LED.Low()
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
-	*/
 	// sleep for 3 seconds to let serial monitor connect
 	for i := 0; i < 3; i++ {
 		println("sleep cycle", i)
@@ -39,18 +37,14 @@ func main() {
 
 	loraRadio, err := hardware.ConfigureLoRa()
 	if err != nil {
-		panic(err)
+		println("failed configuring radio:", err.Error())
 	}
 	_ = loraRadio
 
-	/*
-
-		detected := loraRadio.DetectDevice()
-		if !detected {
-			panic("sx1262 not detected")
-		}
-
-	*/
+	detected := loraRadio.DetectDevice()
+	if !detected {
+		println("sx1262 not detected")
+	}
 
 	loraConf := lora.Config{
 		Freq:           906875000,
@@ -66,11 +60,10 @@ func main() {
 		LoraTxPowerDBm: 1,
 	}
 
-	_ = loraConf
-	//loraRadio.LoraConfig(loraConf)
+	loraRadio.LoraConfig(loraConf)
 
-	dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
-	println("main: Receiving Lora ")
+	//dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
+	//println("main: Receiving Lora ")
 
 	// importing this package makes the whole program not run
 	thing := new(pb.NodeInfo)
@@ -79,9 +72,7 @@ func main() {
 	// removing the three lines above (and the pb import) allows program to run
 
 	for {
-		//	buf, err := loraRadio.Rx(0xffffff)
-		var buf []byte
-		var err error
+		buf, err := loraRadio.Rx(0xffffff)
 		if err != nil {
 			println("RX Error: ", err)
 		} else if buf != nil {
@@ -92,42 +83,39 @@ func main() {
 				continue
 			}
 			// ignore duplicates of the packet
-			if dedupe.Seen(packet.Sender, packet.PacketID) {
-				continue
-			}
+			//	if dedupe.Seen(packet.Sender, packet.PacketID) {
+			//		continue
+			//	}
 			println("Packet received:", hex.EncodeToString(buf))
 			println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
 			println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
 			println("payload:", hex.EncodeToString(packet.Payload))
 			println()
-			continue /*
-				data, err := decrypt(packet)
-				if err != nil {
-					println("error decrypting:", err.Error())
-					continue
-				}
-				if data.Portnum == pb.PortNum_TEXT_MESSAGE_APP {
-					println("MESSAGE:", string(data.Payload))
-				}
-			*/
+			data, err := decrypt(packet)
+			if err != nil {
+				println("error decrypting:", err.Error())
+				continue
+			}
+			if data.Portnum == pb.PortNum_TEXT_MESSAGE_APP {
+				println("MESSAGE:", string(data.Payload))
+			}
+
 		}
 	}
 }
 
-//	func decrypt(packet Packet) (*pb.Data, error) {
-//		return nil, errors.New("uh")
-//
-//			decrypted, err := XOR(packet.Payload, DefaultKey, packet.PacketID, packet.Sender)
-//			if err != nil {
-//				//log.Error("failed decrypting packet", "error", err)
-//				return nil, err
-//			}
-//			println("unmarshalling")
-//			var meshPacket *pb.Data
-//			err = meshPacket.UnmarshalVT(decrypted)
-//			if err != nil {
-//				return nil, err
-//			}
-//			return meshPacket, nil
-//
-// }
+func decrypt(packet *Packet) (*pb.Data, error) {
+	decrypted, err := XOR(packet.Payload, DefaultKey, packet.PacketID, packet.Sender)
+	if err != nil {
+		//log.Error("failed decrypting packet", "error", err)
+		return nil, err
+	}
+	println("unmarshalling")
+	meshPacket := new(pb.Data)
+	err = meshPacket.UnmarshalVT(decrypted)
+	if err != nil {
+		return nil, err
+	}
+	return meshPacket, nil
+
+}

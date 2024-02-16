@@ -1,4 +1,4 @@
-//go:build waveshare_rp2040_lora && !windows
+//go:build waveshare_rp2040_lora
 
 package hardware
 
@@ -14,7 +14,7 @@ func init() {
 }
 
 func ConfigureLoRa() (*sx126x.Device, error) {
-	return
+
 	err := machine.SPI1.Configure(machine.SPIConfig{
 		//Mode:      0,
 		Frequency: 8 * 1e6,
