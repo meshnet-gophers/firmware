@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/hex"
+	"github.com/crypto-smoke/meshtastic-go/dedupe"
 	"github.com/meshnet-gophers/firmware/hardware"
-	pb "github.com/meshnet-gophers/protobufs/meshtastic"
+	meshtastic "github.com/meshnet-gophers/firmware/meshtastic"
+	pb "github.com/meshnet-gophers/firmware/meshtastic"
 	"machine"
+	"math"
 	"time"
 	"tinygo.org/x/drivers/lora"
 )
@@ -62,15 +65,52 @@ func main() {
 
 	loraRadio.LoraConfig(loraConf)
 
-	//dedupe := meshtastic.NewDeduplicator(nil, 10*time.Minute)
-	//println("main: Receiving Lora ")
+	dedupe := dedupe.NewDeduplicator(nil, 10*time.Minute)
+	println("main: Receiving Lora ")
 
-	// importing this package makes the whole program not run
-	thing := new(pb.NodeInfo)
-	thing.Num = 69420
-	println(thing.Num)
-	// removing the three lines above (and the pb import) allows program to run
+	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
+	if err != nil {
+		println("error decoding packet hex string:", err.Error())
+		return
+	}
+	txtPkt, err := ParsePacket(pktBytes)
+	if err != nil {
+		println("error parsing packet:", err.Error())
+		return
+	}
+	data, err := decrypt(txtPkt)
+	if err != nil {
+		println("error unmarshalling packet payload:", err.Error())
+		return
+	}
 
+	txtPkt.PacketID, err = machine.GetRNG()
+	if err != nil {
+		println("error getting random packet ID:", err.Error())
+		return
+	}
+	txtPkt.Sender = math.MaxUint32 - 1
+
+	data.Payload = []byte("hello from rp2040")
+
+	txtPkt, err = encrypt(txtPkt, data)
+	if err != nil {
+		println("error encrypting data:", err.Error())
+		return
+	}
+
+	out, err := MarshalPacket(txtPkt)
+	if err != nil {
+		println("error marshalling packet:", err.Error())
+		return
+	}
+
+	err = loraRadio.Tx(out, 1000*10)
+	if err != nil {
+		println("error transmitting packet:", err.Error())
+		return
+	}
+	println("packet sent!")
 	for {
 		buf, err := loraRadio.Rx(0xffffff)
 		if err != nil {
@@ -83,9 +123,10 @@ func main() {
 				continue
 			}
 			// ignore duplicates of the packet
-			//	if dedupe.Seen(packet.Sender, packet.PacketID) {
-			//		continue
-			//	}
+			if dedupe.Seen(packet.Sender, packet.PacketID) {
+				continue
+			}
+
 			println("Packet received:", hex.EncodeToString(buf))
 			println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
 			println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
@@ -96,8 +137,42 @@ func main() {
 				println("error decrypting:", err.Error())
 				continue
 			}
-			if data.Portnum == pb.PortNum_TEXT_MESSAGE_APP {
+			switch data.Portnum {
+			case pb.PortNum_TEXT_MESSAGE_APP:
 				println("MESSAGE:", string(data.Payload))
+				data.Payload = []byte("ok")
+				payload, err := data.MarshalVT()
+				if err != nil {
+					println("error marshalling payload:", err.Error())
+					continue
+				}
+				packet.PacketID++
+				packet.Sender = math.MaxUint32 - 1
+
+				packet.Payload = payload
+
+				out, err := MarshalPacket(packet)
+				if err != nil {
+					println("error marshalling packet:", err.Error())
+					continue
+				}
+
+				err = loraRadio.Tx(out, 1000*10)
+				if err != nil {
+					println("error transmitting packet:", err.Error())
+					continue
+				}
+			case pb.PortNum_NODEINFO_APP:
+				u := new(meshtastic.User)
+				err = u.UnmarshalVT(data.Payload)
+				if err != nil {
+					println("failed unmarshalling user:", err.Error())
+					continue
+				}
+				println("nodeinfo:", u.LongName)
+
+				data.WantResponse = true
+
 			}
 
 		}
@@ -110,7 +185,6 @@ func decrypt(packet *Packet) (*pb.Data, error) {
 		//log.Error("failed decrypting packet", "error", err)
 		return nil, err
 	}
-	println("unmarshalling")
 	meshPacket := new(pb.Data)
 	err = meshPacket.UnmarshalVT(decrypted)
 	if err != nil {
@@ -118,4 +192,18 @@ func decrypt(packet *Packet) (*pb.Data, error) {
 	}
 	return meshPacket, nil
 
+}
+
+func encrypt(packet *Packet, data *pb.Data) (*Packet, error) {
+	d, err := data.MarshalVT()
+	if err != nil {
+		return nil, err
+	}
+	encrypted, err := XOR(d, DefaultKey, packet.PacketID, packet.Sender)
+	if err != nil {
+		//log.Error("failed decrypting packet", "error", err)
+		return nil, err
+	}
+	packet.Payload = encrypted
+	return packet, nil
 }
