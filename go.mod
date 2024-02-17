@@ -3,7 +3,7 @@ module github.com/meshnet-gophers/firmware
 go 1.21
 
 require (
-	github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240216173329-e8d65dbd875b
+	github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240217194452-3bfd8048b5a9
 	github.com/planetscale/vtprotobuf v0.6.0
 	google.golang.org/protobuf v1.32.0
 	tinygo.org/x/drivers v0.26.0

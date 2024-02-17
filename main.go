@@ -65,7 +65,7 @@ func main() {
 
 	loraRadio.LoraConfig(loraConf)
 
-	dedupe := dedupe.NewDeduplicator(nil, 10*time.Minute)
+	dedupe := dedup.NewDeduplicator(10 * time.Minute)
 	println("main: Receiving Lora ")
 
 	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
