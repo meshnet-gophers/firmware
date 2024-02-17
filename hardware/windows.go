@@ -1,4 +1,4 @@
-//go:build windows
+//go:build amd64
 
 package hardware
 
