@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/meshnet-gophers/firmware/internal"
 	"machine"
 	"math"
 	"time"
@@ -29,7 +30,7 @@ func blink() {
 // tinygo build -target=waveshare-rp2040-lora -ldflags '-X main.SendMsg="hello from linker"' -o firmware.uf2
 var SendMsg string
 
-type DispatchFunc func(string, *Packet, *pb.Data) error
+type DispatchFunc func(string, *internal.Packet, *pb.Data) error
 
 type NamedKey struct {
 	name string
@@ -40,16 +41,16 @@ type MeshNode struct {
 	radio       *sx126x.Device
 	dedup       *dedup.PacketDeduplicator
 	handlers    map[pb.PortNum]DispatchFunc
-	repeatAfter func(*Packet) time.Duration
+	repeatAfter func(*internal.Packet) time.Duration
 	keys        []NamedKey
 }
 
-func (m *MeshNode) sendTest(msg string) (*Packet, error) {
+func (m *MeshNode) sendTest(msg string) (*internal.Packet, error) {
 	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
 	if err != nil {
 		return nil, err
 	}
-	txtPkt, err := ParsePacket(pktBytes)
+	txtPkt, err := internal.ParsePacket(pktBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +67,12 @@ func (m *MeshNode) sendTest(msg string) (*Packet, error) {
 
 	data.Payload = []byte(msg)
 
-	txtPkt, err = m.encrypt(DefaultKey, txtPkt, data)
+	txtPkt, err = m.encrypt(internal.DefaultKey, txtPkt, data)
 	if err != nil {
 		return nil, err
 	}
 
-	out, err := MarshalPacket(txtPkt)
+	out, err := internal.MarshalPacket(txtPkt)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (m *MeshNode) recvLoop() {
 		}
 
 		//log.Println("Packet Received: len=", len(buf), string(buf))
-		packet, err := ParsePacket(buf)
+		packet, err := internal.ParsePacket(buf)
 		if err != nil {
 			println("error parsing packet:", err.Error())
 			continue
@@ -134,10 +135,10 @@ func (m *MeshNode) recvLoop() {
 	}
 }
 
-func (m *MeshNode) repeat(packet *Packet) error {
+func (m *MeshNode) repeat(packet *internal.Packet) error {
 	println("repeat goes here")
 	packet.Flags.HopLimit = packet.Flags.HopLimit - 1
-	_, err := MarshalPacket(packet)
+	_, err := internal.MarshalPacket(packet)
 	if err != nil {
 		return err
 	}
@@ -190,15 +191,15 @@ func main() {
 		radio: loraRadio,
 		dedup: dedupe,
 		keys: []NamedKey{
-			NamedKey{"LongFast", DefaultKey},
+			NamedKey{"LongFast", internal.DefaultKey},
 		},
-		repeatAfter: func(*Packet) time.Duration { return time.Second },
+		repeatAfter: func(*internal.Packet) time.Duration { return time.Second },
 		handlers: map[pb.PortNum]DispatchFunc{
-			pb.PortNum_TEXT_MESSAGE_APP: func(kname string, packet *Packet, data *pb.Data) error {
+			pb.PortNum_TEXT_MESSAGE_APP: func(kname string, packet *internal.Packet, data *pb.Data) error {
 				println("MESSAGE on:", kname, string(data.Payload))
 				return nil
 			},
-			pb.PortNum_NODEINFO_APP: func(kname string, packet *Packet, data *pb.Data) error {
+			pb.PortNum_NODEINFO_APP: func(kname string, packet *internal.Packet, data *pb.Data) error {
 				u := new(meshtastic.User)
 				if err := u.UnmarshalVT(data.Payload); err != nil {
 					println("failed unmarshalling user:", err.Error())
@@ -222,9 +223,9 @@ func main() {
 	node.recvLoop()
 }
 
-func (m *MeshNode) decrypt(packet *Packet) (string, *pb.Data, error) {
+func (m *MeshNode) decrypt(packet *internal.Packet) (string, *pb.Data, error) {
 	for _, namedKey := range m.keys {
-		decrypted, err := XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
+		decrypted, err := internal.XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
 		if err != nil {
 			continue
 		}
@@ -238,12 +239,12 @@ func (m *MeshNode) decrypt(packet *Packet) (string, *pb.Data, error) {
 	return "", nil, errors.New("unable to decrypt")
 }
 
-func (m *MeshNode) encrypt(key []byte, packet *Packet, data *pb.Data) (*Packet, error) {
+func (m *MeshNode) encrypt(key []byte, packet *internal.Packet, data *pb.Data) (*internal.Packet, error) {
 	d, err := data.MarshalVT()
 	if err != nil {
 		return nil, err
 	}
-	encrypted, err := XOR(d, key, packet.PacketID, packet.Sender)
+	encrypted, err := internal.XOR(d, key, packet.PacketID, packet.Sender)
 	if err != nil {
 		//log.Error("failed decrypting packet", "error", err)
 		return nil, err
