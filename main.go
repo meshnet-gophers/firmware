@@ -45,7 +45,7 @@ func NewNamedKey(name string, key []byte) NamedKey {
 	return NamedKey{
 		name: name,
 		key:  key,
-		hash: hash,
+		hash: uint8(hash),
 	}
 }
 
@@ -238,6 +238,9 @@ func main() {
 
 func (m *MeshNode) decrypt(packet *internal.Packet) (string, *pb.Data, error) {
 	for _, namedKey := range m.keys {
+		if namedKey.hash != packet.ChannelHash {
+			continue
+		}
 		decrypted, err := internal.XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
 		if err != nil {
 			continue
