@@ -34,6 +34,19 @@ type DispatchFunc func(string, *internal.Packet, *pb.Data) error
 type NamedKey struct {
 	name string
 	key  []byte
+	hash byte
+}
+
+func NewNamedKey(name string, key []byte) NamedKey {
+	hash, err := internal.ChannelHash(name, key)
+	if err != nil {
+		panic(err.Error())
+	}
+	return NamedKey{
+		name: name,
+		key:  key,
+		hash: hash,
+	}
 }
 
 type MeshNode struct {
@@ -190,7 +203,8 @@ func main() {
 		radio: loraRadio,
 		dedup: dedupe,
 		keys: []NamedKey{
-			NamedKey{"LongFast", internal.DefaultKey},
+			NewNamedKey("LongFast", internal.DefaultKey),
+			NewNamedKey("Quiet", internal.DefaultKey),
 		},
 		repeatAfter: func(*internal.Packet) time.Duration { return time.Second },
 		handlers: map[pb.PortNum]DispatchFunc{

@@ -10,6 +10,27 @@ import (
 
 var DefaultKey = []byte{0xd4, 0xf1, 0xbb, 0x3a, 0x20, 0x29, 0x07, 0x59, 0xf0, 0xbc, 0xff, 0xab, 0xcf, 0x4e, 0x69, 0x01}
 
+// xorHash computes a simple XOR hash of the provided byte slice.
+func xorHash(p []byte) uint8 {
+	var code uint8
+	for _, b := range p {
+		code ^= b
+	}
+	return code
+}
+
+// GenerateHash returns the hash for a given channel by XORing the channel name and PSK.
+func ChannelHash(channelName string, channelKey []byte) (byte, error) {
+	if len(channelKey) == 0 {
+		return 0, fmt.Errorf("channel key cannot be empty")
+	}
+
+	h := xorHash([]byte(channelName))
+	h ^= xorHash(channelKey)
+
+	return h, nil
+}
+
 // CreateNonce creates a 128-bit nonce.
 // It takes a uint32 packetId, converts it to a uint64, and a uint32 fromNode.
 // The nonce is concatenated as [64-bit packetId][32-bit fromNode][32-bit block counter].
