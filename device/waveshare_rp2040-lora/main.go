@@ -10,7 +10,6 @@ import (
 
 	dedup "github.com/crypto-smoke/meshtastic-go/dedupe"
 	"github.com/meshnet-gophers/firmware/hardware"
-	meshtastic "github.com/meshnet-gophers/firmware/meshtastic"
 	pb "github.com/meshnet-gophers/firmware/meshtastic"
 	"github.com/meshnet-gophers/firmware/sx126x"
 	"tinygo.org/x/drivers/lora"
@@ -200,7 +199,7 @@ func main() {
 				return nil
 			},
 			pb.PortNum_NODEINFO_APP: func(kname string, packet *internal.Packet, data *pb.Data) error {
-				u := new(meshtastic.User)
+				u := new(pb.User)
 				if err := u.UnmarshalVT(data.Payload); err != nil {
 					println("failed unmarshalling user:", err.Error())
 					return err
