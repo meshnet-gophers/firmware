@@ -10,6 +10,8 @@ github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240217194452-3bfd8048b5a9 h1:2A
 github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240217194452-3bfd8048b5a9/go.mod h1:3PwnuQtKfQK42Jg2xTOXuc5bhE1rlmiKmYZNKh4W0z0=
 github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240217204302-59cf28f56db5 h1:Tb9B8E2d5ecVtzF1rqV4bDufZp5rzSJNHAd3Xju2JrY=
 github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240217204302-59cf28f56db5/go.mod h1:3PwnuQtKfQK42Jg2xTOXuc5bhE1rlmiKmYZNKh4W0z0=
+github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240218184245-d7c0c64eb92b h1:jBO7o3uw26rQRve2ryElcpXFIJHJdHl4npkqJhsk/M4=
+github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240218184245-d7c0c64eb92b/go.mod h1:3PwnuQtKfQK42Jg2xTOXuc5bhE1rlmiKmYZNKh4W0z0=
 github.com/crypto-smoke/meshtastic-go v0.1.5 h1:HoxpfNa4tnFT6p1Sl65FQB/1JC6qnVPncfnft2PR5VE=
 github.com/crypto-smoke/meshtastic-go v0.1.5/go.mod h1:3DWams4xNYG6csu5YUS3/ze96cdWxbD71PGPVTZ8Ng4=
 github.com/golang/protobuf v1.5.0/go.mod h1:FsONVRAS9T7sI+LIUmWTfcYkHO4aIWwzhcaSAoJOfIk=
