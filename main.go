@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/hex"
-	"github.com/crypto-smoke/meshtastic-go/dedupe"
-	"github.com/meshnet-gophers/firmware/hardware"
-	meshtastic "github.com/meshnet-gophers/firmware/meshtastic"
-	pb "github.com/meshnet-gophers/firmware/meshtastic"
 	"machine"
 	"math"
 	"time"
+
+	dedup "github.com/crypto-smoke/meshtastic-go/dedupe"
+	"github.com/meshnet-gophers/firmware/hardware"
+	meshtastic "github.com/meshnet-gophers/firmware/meshtastic"
+	pb "github.com/meshnet-gophers/firmware/meshtastic"
+	"github.com/meshnet-gophers/firmware/sx126x"
 	"tinygo.org/x/drivers/lora"
 )
 
@@ -17,17 +19,56 @@ const (
 	LORA_DEFAULT_TXTIMEOUT_MS = 5000
 )
 
-func main() {
+func blink() {
+	hardware.LED.Set(!hardware.LED.Get())
+	time.AfterFunc(time.Second, blink)
+}
 
-	go func() {
-		hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
-		for {
-			hardware.LED.High()
-			time.Sleep(1 * time.Second)
-			hardware.LED.Low()
-			time.Sleep(1 * time.Second)
-		}
-	}()
+func sendTest(loraRadio *sx126x.Device, msg string) (*Packet, error) {
+	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
+	if err != nil {
+		return nil, err
+	}
+	txtPkt, err := ParsePacket(pktBytes)
+	if err != nil {
+		return nil, err
+	}
+	data, err := decrypt(txtPkt)
+	if err != nil {
+		return nil, err
+	}
+
+	txtPkt.PacketID, err = machine.GetRNG()
+	if err != nil {
+		return nil, err
+	}
+	txtPkt.Sender = math.MaxUint32 - 1
+
+	data.Payload = []byte(msg)
+
+	txtPkt, err = encrypt(txtPkt, data)
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := MarshalPacket(txtPkt)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := loraRadio.Tx(out, 1000*10); err != nil {
+		return nil, err
+	}
+	return txtPkt, nil
+}
+
+// For testing, injecting a value at link time will cause this message to be sent.
+// tinygo build -target=waveshare-rp2040-lora -ldflags '-X main.SendMsg="hello from linker"' -o firmware.uf2
+var SendMsg string
+
+func main() {
+	hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	blink()
 
 	// sleep for 3 seconds to let serial monitor connect
 	for i := 0; i < 3; i++ {
@@ -42,7 +83,6 @@ func main() {
 	if err != nil {
 		println("failed configuring radio:", err.Error())
 	}
-	_ = loraRadio
 
 	detected := loraRadio.DetectDevice()
 	if !detected {
@@ -64,117 +104,80 @@ func main() {
 	}
 
 	loraRadio.LoraConfig(loraConf)
-
 	dedupe := dedup.NewDeduplicator(10 * time.Minute)
+
+	if SendMsg != "" {
+		pkt, err := sendTest(loraRadio, SendMsg)
+		if err != nil {
+			println("error in sendTest(): ", err.Error())
+		} else {
+			println("transmitted...")
+			dedupe.Seen(pkt.Sender, pkt.PacketID)
+		}
+	}
+
 	println("main: Receiving Lora ")
-
-	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
-	if err != nil {
-		println("error decoding packet hex string:", err.Error())
-		return
-	}
-	txtPkt, err := ParsePacket(pktBytes)
-	if err != nil {
-		println("error parsing packet:", err.Error())
-		return
-	}
-	data, err := decrypt(txtPkt)
-	if err != nil {
-		println("error unmarshalling packet payload:", err.Error())
-		return
-	}
-
-	txtPkt.PacketID, err = machine.GetRNG()
-	if err != nil {
-		println("error getting random packet ID:", err.Error())
-		return
-	}
-	txtPkt.Sender = math.MaxUint32 - 1
-
-	data.Payload = []byte("hello from rp2040")
-
-	txtPkt, err = encrypt(txtPkt, data)
-	if err != nil {
-		println("error encrypting data:", err.Error())
-		return
-	}
-
-	out, err := MarshalPacket(txtPkt)
-	if err != nil {
-		println("error marshalling packet:", err.Error())
-		return
-	}
-
-	err = loraRadio.Tx(out, 1000*10)
-	if err != nil {
-		println("error transmitting packet:", err.Error())
-		return
-	}
-	println("packet sent!")
 	for {
 		buf, err := loraRadio.Rx(0xffffff)
 		if err != nil {
 			println("RX Error: ", err)
-		} else if buf != nil {
-			//log.Println("Packet Received: len=", len(buf), string(buf))
-			packet, err := ParsePacket(buf)
+			continue
+		}
+
+		//log.Println("Packet Received: len=", len(buf), string(buf))
+		packet, err := ParsePacket(buf)
+		if err != nil {
+			println("error parsing packet:", err.Error())
+			continue
+		}
+		// ignore duplicates of the packet
+		if dedupe.Seen(packet.Sender, packet.PacketID) {
+			continue
+		}
+
+		println("Packet received:", hex.EncodeToString(buf))
+		println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
+		println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
+		println("payload:", hex.EncodeToString(packet.Payload))
+		println()
+		data, err := decrypt(packet)
+		if err != nil {
+			println("error decrypting:", err.Error())
+			continue
+		}
+		switch data.Portnum {
+		case pb.PortNum_TEXT_MESSAGE_APP:
+			println("MESSAGE:", string(data.Payload))
+			data.Payload = []byte("ok")
+			payload, err := data.MarshalVT()
 			if err != nil {
-				println("error parsing packet:", err.Error())
+				println("error marshalling payload:", err.Error())
 				continue
 			}
-			// ignore duplicates of the packet
-			if dedupe.Seen(packet.Sender, packet.PacketID) {
-				continue
-			}
+			packet.PacketID++
+			packet.Sender = math.MaxUint32 - 1
 
-			println("Packet received:", hex.EncodeToString(buf))
-			println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
-			println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
-			println("payload:", hex.EncodeToString(packet.Payload))
-			println()
-			data, err := decrypt(packet)
+			packet.Payload = payload
+
+			out, err := MarshalPacket(packet)
 			if err != nil {
-				println("error decrypting:", err.Error())
+				println("error marshalling packet:", err.Error())
 				continue
 			}
-			switch data.Portnum {
-			case pb.PortNum_TEXT_MESSAGE_APP:
-				println("MESSAGE:", string(data.Payload))
-				data.Payload = []byte("ok")
-				payload, err := data.MarshalVT()
-				if err != nil {
-					println("error marshalling payload:", err.Error())
-					continue
-				}
-				packet.PacketID++
-				packet.Sender = math.MaxUint32 - 1
 
-				packet.Payload = payload
-
-				out, err := MarshalPacket(packet)
-				if err != nil {
-					println("error marshalling packet:", err.Error())
-					continue
-				}
-
-				err = loraRadio.Tx(out, 1000*10)
-				if err != nil {
-					println("error transmitting packet:", err.Error())
-					continue
-				}
-			case pb.PortNum_NODEINFO_APP:
-				u := new(meshtastic.User)
-				err = u.UnmarshalVT(data.Payload)
-				if err != nil {
-					println("failed unmarshalling user:", err.Error())
-					continue
-				}
-				println("nodeinfo:", u.LongName)
-
-				data.WantResponse = true
-
+			if err := loraRadio.Tx(out, 1000*10); err != nil {
+				println("error transmitting packet:", err.Error())
+				continue
 			}
+		case pb.PortNum_NODEINFO_APP:
+			u := new(meshtastic.User)
+			if err := u.UnmarshalVT(data.Payload); err != nil {
+				println("failed unmarshalling user:", err.Error())
+				continue
+			}
+			println("nodeinfo:", u.LongName)
 
+			data.WantResponse = true
 		}
 	}
 }
