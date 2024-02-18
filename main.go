@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"machine"
 	"math"
 	"time"
@@ -24,7 +25,26 @@ func blink() {
 	time.AfterFunc(time.Second, blink)
 }
 
-func sendTest(loraRadio *sx126x.Device, msg string) (*Packet, error) {
+// For testing, injecting a value at link time will cause this message to be sent.
+// tinygo build -target=waveshare-rp2040-lora -ldflags '-X main.SendMsg="hello from linker"' -o firmware.uf2
+var SendMsg string
+
+type DispatchFunc func(string, *Packet, *pb.Data) error
+
+type NamedKey struct {
+	name string
+	key  []byte
+}
+
+type MeshNode struct {
+	radio       *sx126x.Device
+	dedup       *dedup.PacketDeduplicator
+	handlers    map[pb.PortNum]DispatchFunc
+	repeatAfter func(*Packet) time.Duration
+	keys        []NamedKey
+}
+
+func (m *MeshNode) sendTest(msg string) (*Packet, error) {
 	pktBytes, err := hex.DecodeString("ffffffffd426ec7a66f7be31035e528374b5a62151")
 	if err != nil {
 		return nil, err
@@ -33,7 +53,7 @@ func sendTest(loraRadio *sx126x.Device, msg string) (*Packet, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := decrypt(txtPkt)
+	_, data, err := m.decrypt(txtPkt)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +66,7 @@ func sendTest(loraRadio *sx126x.Device, msg string) (*Packet, error) {
 
 	data.Payload = []byte(msg)
 
-	txtPkt, err = encrypt(txtPkt, data)
+	txtPkt, err = m.encrypt(DefaultKey, txtPkt, data)
 	if err != nil {
 		return nil, err
 	}
@@ -56,23 +76,10 @@ func sendTest(loraRadio *sx126x.Device, msg string) (*Packet, error) {
 		return nil, err
 	}
 
-	if err := loraRadio.Tx(out, 1000*10); err != nil {
+	if err := m.radio.Tx(out, 1000*10); err != nil {
 		return nil, err
 	}
 	return txtPkt, nil
-}
-
-// For testing, injecting a value at link time will cause this message to be sent.
-// tinygo build -target=waveshare-rp2040-lora -ldflags '-X main.SendMsg="hello from linker"' -o firmware.uf2
-var SendMsg string
-
-type DispatchFunc func(*Packet, *pb.Data) error
-
-type MeshNode struct {
-	radio       *sx126x.Device
-	dedup       *dedup.PacketDeduplicator
-	handlers    map[pb.PortNum]DispatchFunc
-	repeatAfter func(*Packet) time.Duration
 }
 
 func (m *MeshNode) recvLoop() {
@@ -100,6 +107,8 @@ func (m *MeshNode) recvLoop() {
 				time.AfterFunc(delay, func() {
 					if err := m.repeat(packet); err != nil {
 						println("error retransmitting: ", err.Error())
+					} else {
+						println("retransmatted")
 					}
 				})
 			}
@@ -110,15 +119,17 @@ func (m *MeshNode) recvLoop() {
 		println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
 		println("payload:", hex.EncodeToString(packet.Payload))
 		println()
-		data, err := decrypt(packet)
+		keyName, data, err := m.decrypt(packet)
 		if err != nil {
 			println("error decrypting:", err.Error())
 			continue
 		}
 		if f, ok := m.handlers[data.Portnum]; ok {
-			if err := f(packet, data); err != nil {
+			if err := f(keyName, packet, data); err != nil {
 				println("error processing incoming packet: ", err.Error())
 			}
+		} else {
+			println("no handler for ", data.Portnum)
 		}
 	}
 }
@@ -126,12 +137,13 @@ func (m *MeshNode) recvLoop() {
 func (m *MeshNode) repeat(packet *Packet) error {
 	println("repeat goes here")
 	packet.Flags.HopLimit = packet.Flags.HopLimit - 1
-	out, err := MarshalPacket(packet)
+	_, err := MarshalPacket(packet)
 	if err != nil {
 		return err
 	}
+	return nil
 
-	return m.radio.Tx(out, 1000*10)
+	// return m.radio.Tx(out, 1000*10)
 }
 
 func main() {
@@ -173,8 +185,32 @@ func main() {
 	loraRadio.LoraConfig(loraConf)
 	dedupe := dedup.NewDeduplicator(10 * time.Minute)
 
+	println("main: Receiving Lora ")
+	node := &MeshNode{
+		radio: loraRadio,
+		dedup: dedupe,
+		keys: []NamedKey{
+			NamedKey{"LongFast", DefaultKey},
+		},
+		repeatAfter: func(*Packet) time.Duration { return time.Second },
+		handlers: map[pb.PortNum]DispatchFunc{
+			pb.PortNum_TEXT_MESSAGE_APP: func(kname string, packet *Packet, data *pb.Data) error {
+				println("MESSAGE on:", kname, string(data.Payload))
+				return nil
+			},
+			pb.PortNum_NODEINFO_APP: func(kname string, packet *Packet, data *pb.Data) error {
+				u := new(meshtastic.User)
+				if err := u.UnmarshalVT(data.Payload); err != nil {
+					println("failed unmarshalling user:", err.Error())
+					return err
+				}
+				println("nodeinfo on:", kname, u.LongName)
+				return nil
+			},
+		}}
+
 	if SendMsg != "" {
-		pkt, err := sendTest(loraRadio, SendMsg)
+		pkt, err := node.sendTest(SendMsg)
 		if err != nil {
 			println("error in sendTest(): ", err.Error())
 		} else {
@@ -183,50 +219,31 @@ func main() {
 		}
 	}
 
-	println("main: Receiving Lora ")
-	node := &MeshNode{
-		radio:       loraRadio,
-		dedup:       dedupe,
-		repeatAfter: func(*Packet) time.Duration { return time.Second },
-		handlers: map[pb.PortNum]DispatchFunc{
-			pb.PortNum_TEXT_MESSAGE_APP: func(packet *Packet, data *pb.Data) error {
-				println("MESSAGE:", string(data.Payload))
-				return nil
-			},
-			pb.PortNum_NODEINFO_APP: func(packet *Packet, data *pb.Data) error {
-				u := new(meshtastic.User)
-				if err := u.UnmarshalVT(data.Payload); err != nil {
-					println("failed unmarshalling user:", err.Error())
-					return err
-				}
-				println("nodeinfo:", u.LongName)
-				return nil
-			},
-		}}
 	node.recvLoop()
 }
 
-func decrypt(packet *Packet) (*pb.Data, error) {
-	decrypted, err := XOR(packet.Payload, DefaultKey, packet.PacketID, packet.Sender)
-	if err != nil {
-		//log.Error("failed decrypting packet", "error", err)
-		return nil, err
+func (m *MeshNode) decrypt(packet *Packet) (string, *pb.Data, error) {
+	for _, namedKey := range m.keys {
+		decrypted, err := XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
+		if err != nil {
+			continue
+		}
+		meshPacket := new(pb.Data)
+		err = meshPacket.UnmarshalVT(decrypted)
+		if err != nil {
+			return "", nil, err
+		}
+		return namedKey.name, meshPacket, nil
 	}
-	meshPacket := new(pb.Data)
-	err = meshPacket.UnmarshalVT(decrypted)
-	if err != nil {
-		return nil, err
-	}
-	return meshPacket, nil
-
+	return "", nil, errors.New("unable to decrypt")
 }
 
-func encrypt(packet *Packet, data *pb.Data) (*Packet, error) {
+func (m *MeshNode) encrypt(key []byte, packet *Packet, data *pb.Data) (*Packet, error) {
 	d, err := data.MarshalVT()
 	if err != nil {
 		return nil, err
 	}
-	encrypted, err := XOR(d, DefaultKey, packet.PacketID, packet.Sender)
+	encrypted, err := XOR(d, key, packet.PacketID, packet.Sender)
 	if err != nil {
 		//log.Error("failed decrypting packet", "error", err)
 		return nil, err
