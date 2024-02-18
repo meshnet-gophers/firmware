@@ -115,7 +115,7 @@ func (m *MeshNode) recvLoop() {
 		}
 
 		// Schedule retransmit
-		if packet.Flags.HopLimit > 1 {
+		if packet.Flags.HopLimit > 0 {
 			if delay := m.repeatAfter(packet); delay >= 0 {
 				time.AfterFunc(delay, func() {
 					if err := m.repeat(packet); err != nil {
