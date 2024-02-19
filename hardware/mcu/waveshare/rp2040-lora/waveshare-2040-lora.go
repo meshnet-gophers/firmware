@@ -1,6 +1,4 @@
-//go:build waveshare_rp2040_lora
-
-package hardware
+package rp2040_lora
 
 import (
 	"github.com/meshnet-gophers/firmware/sx126x"

@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/hex"
 	"errors"
+	"github.com/meshnet-gophers/firmware/hardware/mcu/waveshare/rp2040-lora"
 	"github.com/meshnet-gophers/firmware/internal"
 	"machine"
 	"math"
 	"time"
 
 	dedup "github.com/crypto-smoke/meshtastic-go/dedupe"
-	"github.com/meshnet-gophers/firmware/hardware"
 	pb "github.com/meshnet-gophers/firmware/meshtastic"
 	"github.com/meshnet-gophers/firmware/sx126x"
 	"tinygo.org/x/drivers/lora"
@@ -21,7 +21,7 @@ const (
 )
 
 func blink() {
-	hardware.LED.Set(!hardware.LED.Get())
+	rp2040_lora.LED.Set(!rp2040_lora.LED.Get())
 	time.AfterFunc(time.Second, blink)
 }
 
@@ -160,7 +160,7 @@ func (m *MeshNode) repeat(packet *internal.Packet) error {
 }
 
 func main() {
-	hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
+	rp2040_lora.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	blink()
 
 	// sleep for 3 seconds to let serial monitor connect
@@ -172,7 +172,7 @@ func main() {
 	println("\n# sx1262 test")
 	println("# ----------------------")
 
-	loraRadio, err := hardware.ConfigureLoRa()
+	loraRadio, err := rp2040_lora.ConfigureLoRa()
 	if err != nil {
 		println("failed configuring radio:", err.Error())
 	}

@@ -1,6 +1,6 @@
 //go:build vcc_gnd_yd_rp2040
 
-package hardware
+package vcc_gnd_yd_rp2040
 
 import (
 	"image/color"
