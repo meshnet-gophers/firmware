@@ -211,7 +211,7 @@ func main() {
 		Ldr:            lora.LowDataRateOptimizeOff,
 		Iq:             lora.IQStandard,
 		Crc:            lora.CRCOn,
-		SyncWord:       0x24b4,
+		SyncWord:       internal.ConvertSyncWord(0x2b, 0x44),
 		LoraTxPowerDBm: 1,
 	}
 
