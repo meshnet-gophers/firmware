@@ -1,6 +1,6 @@
 //go:build amd64
 
-package hardware
+package mock
 
 import (
 	"fmt"
