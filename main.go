@@ -4,10 +4,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"github.com/meshnet-gophers/firmware/internal"
 	"machine"
 	"math"
 	"time"
+
+	"github.com/meshnet-gophers/firmware/internal"
 
 	dedup "github.com/crypto-smoke/meshtastic-go/dedupe"
 	"github.com/meshnet-gophers/firmware/hardware"
@@ -160,6 +161,14 @@ func (m *MeshNode) repeat(packet *internal.Packet) error {
 	// return m.radio.Tx(out, 1000*10)
 }
 
+func NewNamedKeyB64(name, k64 string) NamedKey {
+	dec, err := base64.StdEncoding.DecodeString(k64)
+	if err != nil {
+		panic("error reading private key: " + err.Error())
+	}
+	return NewNamedKey(name, dec)
+}
+
 func main() {
 	hardware.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 	blink()
@@ -199,21 +208,14 @@ func main() {
 	loraRadio.LoraConfig(loraConf)
 	dedupe := dedup.NewDeduplicator(10 * time.Minute)
 
-	dec, err := base64.StdEncoding.DecodeString("5haeCewpmA5LqXB/xxrwGp3bwtMnhuxhwzpi+MvVaVo=")
-	if err != nil {
-		println("error reading private key:", err.Error())
-		return
-	}
-	private := NewNamedKey("Private", dec)
-
 	println("main: Receiving Lora ")
 	node := &MeshNode{
 		radio: loraRadio,
 		dedup: dedupe,
 		keys: []NamedKey{
-			private,
 			NewNamedKey("LongFast", internal.DefaultKey),
 			NewNamedKey("Quiet", internal.DefaultKey),
+			NewNamedKeyB64("Private", "5haeCewpmA5LqXB/xxrwGp3bwtMnhuxhwzpi+MvVaVo="),
 		},
 		repeatAfter: func(*internal.Packet) time.Duration { return time.Second },
 		handlers: map[pb.PortNum]DispatchFunc{
@@ -232,6 +234,10 @@ func main() {
 			},
 		}}
 
+	for _, nk := range node.keys {
+		println("key", nk.name, "has a hash of", nk.hash)
+	}
+
 	if SendMsg != "" {
 		pkt, err := node.sendTest(SendMsg)
 		if err != nil {
@@ -247,7 +253,8 @@ func main() {
 
 func (m *MeshNode) decrypt(packet *internal.Packet) (string, *pb.Data, error) {
 	for _, namedKey := range m.keys {
-		if namedKey.hash != packet.ChannelHash {
+		if packet.ChannelHash != namedKey.hash {
+			println("wrong channel hash for", namedKey.name, ", got", packet.ChannelHash, ", want", namedKey.hash)
 			continue
 		}
 		decrypted, err := internal.XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
