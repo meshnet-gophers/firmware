@@ -10,9 +10,9 @@ import (
 	"math"
 	"time"
 
-	dedup "github.com/crypto-smoke/meshtastic-go/dedupe"
 	pb "github.com/meshnet-gophers/firmware/meshtastic"
 	"github.com/meshnet-gophers/firmware/sx126x"
+	dedup "github.com/meshnet-gophers/meshtastic-go/dedupe"
 	"tinygo.org/x/drivers/lora"
 )
 

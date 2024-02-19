@@ -1,15 +1,12 @@
 module github.com/meshnet-gophers/firmware
 
-go 1.21
+go 1.21.6
 
 require (
-	github.com/crypto-smoke/meshtastic-go v0.1.5-0.20240218184245-d7c0c64eb92b
+	github.com/meshnet-gophers/meshtastic-go v0.1.6
 	github.com/planetscale/vtprotobuf v0.6.0
 	google.golang.org/protobuf v1.32.0
 	tinygo.org/x/drivers v0.26.0
 )
 
-require (
-	buf.build/gen/go/meshtastic/protobufs/protocolbuffers/go v1.32.0-20240216123215-6b07c41c68c9.1 // indirect
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-)
+require github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
