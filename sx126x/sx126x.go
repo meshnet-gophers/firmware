@@ -347,6 +347,12 @@ func (d *Device) GetPacketType() (packetType uint8) {
 	return r[0]
 }
 
+// GetPacketStatus returns information on the last received packet
+func (d *Device) GetPacketStatus() (RssiPkt, SnrPkt, SignalRssiPkt uint8) {
+	r := d.ExecGetCommand(SX126X_CMD_GET_PACKET_STATUS, 3)
+	return r[0], r[1], r[2]
+}
+
 // GetDeviceErrors returns current Device Errors
 func (d *Device) GetDeviceErrors() uint16 {
 	r := d.ExecGetCommand(SX126X_CMD_GET_DEVICE_ERRORS, 2)

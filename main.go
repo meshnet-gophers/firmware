@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/meshnet-gophers/firmware/hardware/mcu/waveshare/rp2040-lora"
 	"github.com/meshnet-gophers/firmware/internal"
 	"machine"
@@ -132,6 +133,16 @@ func (m *MeshNode) recvLoop() {
 		println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
 		println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
 		println("payload:", hex.EncodeToString(packet.Payload))
+		RssiPk, SnrPkt, SignalRssiPkt := m.radio.GetPacketStatus()
+		rssi := -(float64(RssiPk) / 2)
+		rssi = math.Round(rssi*100) / 100
+
+		snr := float64(SnrPkt) / 4
+		snr = math.Round(snr*100) / 100
+
+		signalRSSI := -(float64(SignalRssiPkt) / 2)
+		signalRSSI = math.Round(signalRSSI*100) / 100
+		fmt.Printf("RSSI=%.2fdBm -- Signal RSSI=%.2fdB -- SNR=%.2fdB\n", rssi, signalRSSI, snr)
 		println()
 		keyName, data, err := m.decrypt(packet)
 		if err != nil {
