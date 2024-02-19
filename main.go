@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"github.com/meshnet-gophers/firmware/internal"
@@ -198,11 +199,19 @@ func main() {
 	loraRadio.LoraConfig(loraConf)
 	dedupe := dedup.NewDeduplicator(10 * time.Minute)
 
+	dec, err := base64.StdEncoding.DecodeString("5haeCewpmA5LqXB/xxrwGp3bwtMnhuxhwzpi+MvVaVo=")
+	if err != nil {
+		println("error reading private key:", err.Error())
+		return
+	}
+	private := NewNamedKey("Private", dec)
+
 	println("main: Receiving Lora ")
 	node := &MeshNode{
 		radio: loraRadio,
 		dedup: dedupe,
 		keys: []NamedKey{
+			private,
 			NewNamedKey("LongFast", internal.DefaultKey),
 			NewNamedKey("Quiet", internal.DefaultKey),
 		},
