@@ -1,3 +1,5 @@
+//go:build waveshare_rp2040_lora
+
 package rp2040_lora
 
 import (

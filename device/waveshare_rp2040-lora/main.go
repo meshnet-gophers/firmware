@@ -1,10 +1,17 @@
+//go:build waveshare_rp2040_lora
+
 package main
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/meshnet-gophers/firmware/hardware/mcu/waveshare/rp2040-lora"
 	"github.com/meshnet-gophers/firmware/internal"
+	"github.com/meshnet-gophers/firmware/router"
+	lorafuncs "github.com/meshnet-gophers/meshtastic-go/lora"
 	"machine"
 	"math"
 	"time"
@@ -45,7 +52,7 @@ func NewNamedKey(name string, key []byte) NamedKey {
 	return NamedKey{
 		name: name,
 		key:  key,
-		hash: hash,
+		hash: uint8(hash),
 	}
 }
 
@@ -131,6 +138,19 @@ func (m *MeshNode) recvLoop() {
 		println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
 		println(packet.Sender, packet.Destination, packet.PacketID, packet.Flags.HopLimit, packet.ChannelHash, packet.Flags.WantAck, packet.Flags.ViaMQTT)
 		println("payload:", hex.EncodeToString(packet.Payload))
+		RssiPk, SnrPkt, SignalRssiPkt := m.radio.GetPacketStatus()
+		rssi := -(float64(RssiPk) / 2)
+		rssi = math.Round(rssi*100) / 100
+
+		snr := float64(SnrPkt) / 4
+		snr = math.Round(snr*100) / 100
+
+		signalRSSI := -(float64(SignalRssiPkt) / 2)
+		signalRSSI = math.Round(signalRSSI*100) / 100
+		fmt.Printf("RSSI=%.2fdBm -- Signal RSSI=%.2fdB -- SNR=%.2fdB\n", rssi, signalRSSI, snr)
+		quality := lorafuncs.GetSignalQuality(rssi, snr)
+		notes := lorafuncs.GetDiagnosticNotes(rssi, snr)
+		println("Quality:", quality, "--", notes)
 		println()
 		keyName, data, err := m.decrypt(packet)
 		if err != nil {
@@ -157,6 +177,14 @@ func (m *MeshNode) repeat(packet *internal.Packet) error {
 	return nil
 
 	// return m.radio.Tx(out, 1000*10)
+}
+
+func NewNamedKeyB64(name, k64 string) NamedKey {
+	dec, err := base64.StdEncoding.DecodeString(k64)
+	if err != nil {
+		panic("error reading private key: " + err.Error())
+	}
+	return NewNamedKey(name, dec)
 }
 
 func main() {
@@ -191,53 +219,38 @@ func main() {
 		Ldr:            lora.LowDataRateOptimizeOff,
 		Iq:             lora.IQStandard,
 		Crc:            lora.CRCOn,
-		SyncWord:       0x24b4,
+		SyncWord:       internal.ConvertSyncWord(0x2b, 0x44),
 		LoraTxPowerDBm: 1,
 	}
-
 	loraRadio.LoraConfig(loraConf)
-	dedupe := dedup.NewDeduplicator(10 * time.Minute)
-
-	println("main: Receiving Lora ")
-	node := &MeshNode{
-		radio: loraRadio,
-		dedup: dedupe,
-		keys: []NamedKey{
-			NewNamedKey("LongFast", internal.DefaultKey),
-		},
-		repeatAfter: func(*internal.Packet) time.Duration { return time.Second },
-		handlers: map[pb.PortNum]DispatchFunc{
-			pb.PortNum_TEXT_MESSAGE_APP: func(kname string, packet *internal.Packet, data *pb.Data) error {
-				println("MESSAGE on:", kname, string(data.Payload))
-				return nil
-			},
-			pb.PortNum_NODEINFO_APP: func(kname string, packet *internal.Packet, data *pb.Data) error {
-				u := new(pb.User)
-				if err := u.UnmarshalVT(data.Payload); err != nil {
-					println("failed unmarshalling user:", err.Error())
-					return err
-				}
-				println("nodeinfo on:", kname, u.LongName)
-				return nil
-			},
-		}}
-
-	if SendMsg != "" {
-		pkt, err := node.sendTest(SendMsg)
-		if err != nil {
-			println("error in sendTest(): ", err.Error())
-		} else {
-			println("transmitted...")
-			dedupe.Seen(pkt.Sender, pkt.PacketID)
+	r := router.NewMeshRouter(context.TODO(), 2, loraRadio)
+	go func() {
+		for {
+			select {
+			case packet := <-r.ReceivePacket():
+				println("Packet received:") //, hex.EncodeToString(buf))
+				println("sender, destination, packet ID, hop limit, channel, want ack, via mqtt")
+				println(packet.From, packet.To, packet.Id, packet.HopLimit, packet.Channel, packet.WantAck, packet.ViaMqtt)
+				//	println("payload:", hex.EncodeToString(packet.Payload))
+				println("forwarding packet")
+				r.SendPacket(packet)
+			}
+		}
+	}()
+	r.Start()
+	println("waiting for packets")
+	for i := 0; ; i++ {
+		select {
+		case <-time.NewTimer(30 * time.Second).C:
+			println("would send packet")
 		}
 	}
-
-	node.recvLoop()
 }
 
 func (m *MeshNode) decrypt(packet *internal.Packet) (string, *pb.Data, error) {
 	for _, namedKey := range m.keys {
-		if namedKey.hash != packet.ChannelHash {
+		if packet.ChannelHash != namedKey.hash {
+			println("wrong channel hash for", namedKey.name, ", got", packet.ChannelHash, ", want", namedKey.hash)
 			continue
 		}
 		decrypted, err := internal.XOR(packet.Payload, namedKey.key, packet.PacketID, packet.Sender)
