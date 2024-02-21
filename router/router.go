@@ -78,7 +78,7 @@ func (r *MeshRouter) Start() {
 
 			default: // if nothing to tx, listen for a packet for 1 second
 				// TODO: I don't really like this, we should find a way to listen indefinitely but be able to break out of
-				// it should we get a packet to TX. W eprobably need to take over the sx126x.Device and implement a lot
+				// it should we get a packet to TX. We probably need to take over the sx126x.Device and implement a lot
 				// of this logic in there.
 				buf, err := r.radio.Rx(1000)
 				if err != nil {
