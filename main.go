@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/meshnet-gophers/firmware/hardware/mcu/waveshare/rp2040-lora"
 	"github.com/meshnet-gophers/firmware/internal"
+	lorafuncs "github.com/meshnet-gophers/meshtastic-go/lora"
 	"machine"
 	"math"
 	"time"
@@ -143,6 +144,9 @@ func (m *MeshNode) recvLoop() {
 		signalRSSI := -(float64(SignalRssiPkt) / 2)
 		signalRSSI = math.Round(signalRSSI*100) / 100
 		fmt.Printf("RSSI=%.2fdBm -- Signal RSSI=%.2fdB -- SNR=%.2fdB\n", rssi, signalRSSI, snr)
+		quality := lorafuncs.GetSignalQuality(rssi, snr)
+		notes := lorafuncs.GetDiagnosticNotes(rssi, snr)
+		println("Quality:", quality, "--", notes)
 		println()
 		keyName, data, err := m.decrypt(packet)
 		if err != nil {
