@@ -62,9 +62,7 @@ func main() {
 	for {
 		err := main2()
 		if err != nil {
-			println("ugh")
 			time.Sleep(1 * time.Second)
-			println(errors.Unwrap(err).Error())
 			slog.Error("firmware fatal err", err)
 		}
 	}
@@ -75,18 +73,13 @@ func main2() error {
 	rp2040_lora.LED.Configure(machine.PinConfig{Mode: machine.PinOutput})
 
 	//blink() // bet this gets pretty crazy if main2 gets called multiple times
-	slog.Info("configure")
 	loraRadio, err := rp2040_lora.ConfigureLoRa()
-	slog.Info("config err check")
 	if err != nil {
-		println("oof")
 		return errors.Join(err, errors.New("failed configuring LoRa radio"))
 	}
-	println("detect")
 	if !loraRadio.DetectDevice() {
 		return errors.New("LoRa radio not detected")
 	}
-	slog.Info("okay...")
 	loraConf := lora.Config{
 		Freq:           906875000,
 		Bw:             lora.Bandwidth_250_0,
@@ -107,7 +100,10 @@ func main2() error {
 		for {
 			select {
 			case packet := <-r.ReceivePacket():
-				slog.Info("packet received", packet.From, packet.To, packet.Id, packet.HopLimit, packet.Channel, packet.WantAck, packet.ViaMqtt)
+				slog.Info("packet received",
+					"from", packet.From, "to", packet.To,
+					"id", packet.Id, "hop limit", packet.HopLimit,
+					"channel", packet.Channel, "want ack", packet.WantAck, "via mqtt", packet.ViaMqtt)
 
 				//println("forwarding packet")
 				//r.SendPacket(packet)

@@ -6,6 +6,7 @@ import (
 	"github.com/meshnet-gophers/firmware/internal"
 	dedup "github.com/meshnet-gophers/meshtastic-go/dedupe"
 	meshtastic "github.com/meshnet-gophers/meshtastic-go/meshtastic"
+	"log/slog"
 	"math"
 	"time"
 )
@@ -48,7 +49,7 @@ func (r *MeshRouter) Start() {
 				case *meshtastic.MeshPacket_Decoded:
 					payload, err = p.Decoded.MarshalVT()
 					if err != nil {
-						println("error marshalling mesh packet payload:", err.Error())
+						slog.Error("error marshalling mesh packet payload:", "error", err)
 						continue
 					}
 				case *meshtastic.MeshPacket_Encrypted:
@@ -65,24 +66,24 @@ func (r *MeshRouter) Start() {
 				}
 				pktBytes, err := internal.MarshalPacket(&pkt)
 				if err != nil {
-					println("error marshalling packet:", err.Error())
+					slog.Error("error marshalling packet:", "error", err)
 					continue
 				}
 				timeout := 10 * time.Second
 				err = r.radio.Tx(pktBytes, uint32(timeout.Milliseconds()))
 				if err != nil {
-					println("error transmitting packet:", err.Error())
+					slog.Error("error transmitting packet:", "error", err)
 					continue
 				}
-				println("packet transmitted")
-
+				slog.Debug("packet transmitted")
 			default: // if nothing to tx, listen for a packet for 1 second
 				// TODO: I don't really like this, we should find a way to listen indefinitely but be able to break out of
 				// it should we get a packet to TX. We probably need to take over the sx126x.Device and implement a lot
 				// of this logic in there.
 				buf, err := r.radio.Rx(1000)
 				if err != nil {
-					println("RX Error: ", err)
+					slog.Error("rx error:", "error", err)
+
 					continue
 				}
 				if buf == nil {
@@ -102,8 +103,8 @@ func (r *MeshRouter) Start() {
 
 				packet, err := internal.ParsePacket(buf)
 				if err != nil {
-					println("error parsing packet:", err.Error())
-					println("packet len", len(buf))
+					slog.Error("packet parse error:", "error", err)
+
 					continue
 				}
 				// ignore duplicates of the packet

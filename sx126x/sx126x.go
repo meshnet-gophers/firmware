@@ -504,8 +504,6 @@ func (d *Device) CheckDeviceReady() error {
 
 // ExecSetCommand send a command to configure the peripheral
 func (d *Device) ExecSetCommand(cmd uint8, buf []uint8) {
-	println(9)
-	return
 	err := d.CheckDeviceReady()
 	if err != nil {
 		println("ERR!", err.Error())
@@ -515,7 +513,6 @@ func (d *Device) ExecSetCommand(cmd uint8, buf []uint8) {
 	} else {
 		d.deepSleep = false
 	}
-	println(8)
 	err = d.controller.SetNss(false)
 	if err != nil {
 		println("ERR!", err.Error())
@@ -524,20 +521,16 @@ func (d *Device) ExecSetCommand(cmd uint8, buf []uint8) {
 	d.spiTxBuf = d.spiTxBuf[:0]
 	d.spiTxBuf = append(d.spiTxBuf, cmd)
 	d.spiTxBuf = append(d.spiTxBuf, buf...)
-	println(7)
 	err = d.spi.Tx(d.spiTxBuf, nil)
 
 	if err != nil {
 		println("ERR!", err.Error())
 	}
-	println(6)
 	err = d.controller.SetNss(true)
 	if err != nil {
 		println("ERR!", err.Error())
 	}
-	println(5)
 	if cmd != SX126X_CMD_SET_SLEEP {
-		println("wait while busy")
 		err := d.controller.WaitWhileBusy()
 		if err != nil {
 			println("ERR!", err.Error())
