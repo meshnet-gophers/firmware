@@ -504,21 +504,44 @@ func (d *Device) CheckDeviceReady() error {
 
 // ExecSetCommand send a command to configure the peripheral
 func (d *Device) ExecSetCommand(cmd uint8, buf []uint8) {
-	d.CheckDeviceReady()
+	println(9)
+	return
+	err := d.CheckDeviceReady()
+	if err != nil {
+		println("ERR!", err.Error())
+	}
 	if cmd == SX126X_CMD_SET_SLEEP {
 		d.deepSleep = true
 	} else {
 		d.deepSleep = false
 	}
-	d.controller.SetNss(false)
+	println(8)
+	err = d.controller.SetNss(false)
+	if err != nil {
+		println("ERR!", err.Error())
+	}
 	// Send command and params
 	d.spiTxBuf = d.spiTxBuf[:0]
 	d.spiTxBuf = append(d.spiTxBuf, cmd)
 	d.spiTxBuf = append(d.spiTxBuf, buf...)
-	d.spi.Tx(d.spiTxBuf, nil)
-	d.controller.SetNss(true)
+	println(7)
+	err = d.spi.Tx(d.spiTxBuf, nil)
+
+	if err != nil {
+		println("ERR!", err.Error())
+	}
+	println(6)
+	err = d.controller.SetNss(true)
+	if err != nil {
+		println("ERR!", err.Error())
+	}
+	println(5)
 	if cmd != SX126X_CMD_SET_SLEEP {
-		d.controller.WaitWhileBusy()
+		println("wait while busy")
+		err := d.controller.WaitWhileBusy()
+		if err != nil {
+			println("ERR!", err.Error())
+		}
 	}
 }
 

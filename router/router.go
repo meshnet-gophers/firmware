@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/meshnet-gophers/firmware/hardware/lora"
 	"github.com/meshnet-gophers/firmware/internal"
-	meshtastic "github.com/meshnet-gophers/firmware/meshtastic"
 	dedup "github.com/meshnet-gophers/meshtastic-go/dedupe"
+	meshtastic "github.com/meshnet-gophers/meshtastic-go/meshtastic"
 	"math"
 	"time"
 )
@@ -121,7 +121,7 @@ func (r *MeshRouter) Start() {
 					RxSnr:          float32(snr),
 					HopLimit:       uint32(packet.Flags.HopLimit),
 					WantAck:        packet.Flags.WantAck,
-					Priority:       0, // not sure what to do with this (TODO)
+					Priority:       0, // TODO https://buf.build/meshtastic/protobufs/docs/main:meshtastic#meshtastic.MeshPacket.Priority
 					RxRssi:         int32(rssi),
 					Delayed:        0,
 					ViaMqtt:        packet.Flags.ViaMQTT,
