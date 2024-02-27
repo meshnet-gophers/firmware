@@ -1,19 +1,12 @@
 TINYGO_TARGET=waveshare-rp2040-lora
-OUTPUT_FILE_NAME=
-
-# Function to determine the correct output file name based on TINYGO_TARGET
-define determine_output_file_name
-$(if $(TINYGO_TARGET),$(TINYGO_TARGET).uf2,default_output.uf2)
-endef
 
 build:
-	@$(eval OUTPUT_FILE_NAME=$(call determine_output_file_name))
-	$(if $(TINYGO_TARGET),tinygo build -target $(TINYGO_TARGET) -scheduler tasks -gc conservative -size full -o $(OUTPUT_FILE_NAME),tinygo build -scheduler tasks -gc conservative -size full -o $(OUTPUT_FILE_NAME))
+	tinygo build -target ${TINYGO_TARGET} -scheduler tasks -gc conservative -size full --stack-size=4kb -tags plugin_beacon -o ${TINYGO_TARGET}.uf2
 
 flash:
-	$(if $(TINYGO_TARGET),tinygo flash -target $(TINYGO_TARGET) -scheduler tasks -gc conservative -size full,tinygo flash -scheduler tasks -gc conservative -size full)
+	tinygo flash -target ${TINYGO_TARGET} -scheduler tasks -gc conservative -size full --stack-size=4kb -tags plugin_beacon
 
 monitor:
-	$(if $(TINYGO_TARGET),tinygo monitor -target $(TINYGO_TARGET),tinygo monitor)
+	tinygo monitor -target ${TINYGO_TARGET}
 
 all: build flash monitor

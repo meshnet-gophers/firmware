@@ -1,5 +1,5 @@
 //go:build plugin_beacon
 
-package plugin
+package plugins
 
 import _ "github.com/meshnet-gophers/firmware/plugin/beacon"
