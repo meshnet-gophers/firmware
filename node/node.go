@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/meshnet-gophers/firmware/hardware/mcu/waveshare/rp2040-lora"
 	"github.com/meshnet-gophers/firmware/internal"
+	_ "github.com/meshnet-gophers/firmware/node/plugins"
 	"github.com/meshnet-gophers/firmware/plugin/registry"
 	"github.com/meshnet-gophers/firmware/router"
 	"github.com/meshnet-gophers/meshtastic-go"
