@@ -48,18 +48,21 @@ func (b *Beacon) Init(r *router.MeshRouter, u *pb.User, nodeID uint32) {
 	}
 	r.SendPacket(info)
 	slog.Info("nodeinfo sent")
-	for i := 0; ; i++ {
-		select {
-		case <-time.NewTimer(30 * time.Second).C:
-			info, err := b.buildNodeInfo()
-			if err != nil {
-				slog.Error("error building nodeinfo", "err", err)
-				continue
+	go func() {
+		for i := 0; ; i++ {
+			select {
+			case <-time.NewTimer(30 * time.Second).C:
+				info, err := b.buildNodeInfo()
+				if err != nil {
+					slog.Error("error building nodeinfo", "err", err)
+					continue
+				}
+				r.SendPacket(info)
+				slog.Info("nodeinfo sent")
 			}
-			r.SendPacket(info)
-			slog.Info("nodeinfo sent")
 		}
-	}
+	}()
+
 }
 
 // creates a node info packet and encrypts it for LongFast

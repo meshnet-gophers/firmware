@@ -16,7 +16,6 @@ func blink() {
 }
 
 func main() {
-
 	lvl := new(slog.LevelVar)
 	lvl.Set(slog.LevelDebug)
 	logger := slog.New(slog.NewTextHandler(machine.Serial, &slog.HandlerOptions{
