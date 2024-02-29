@@ -1,6 +1,6 @@
 module github.com/meshnet-gophers/firmware
 
-go 1.21.6
+go 1.21
 
 require (
 	github.com/meshnet-gophers/meshtastic-go v0.1.6

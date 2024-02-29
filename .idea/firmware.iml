@@ -18,6 +18,7 @@
           <option value="gc.conservative" />
           <option value="scheduler.tasks" />
           <option value="serial.usb" />
+          <option value="plugin_beacon" />
         </array>
       </option>
     </buildTags>
